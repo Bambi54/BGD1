@@ -1,2 +1,4 @@
 duckdb
 psycopg2-binary
+numpy
+pandas

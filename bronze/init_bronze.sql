@@ -43,6 +43,7 @@ CREATE TABLE bronze.raw_green_trips (
     mta_tax                 TEXT,
     tip_amount              TEXT,
     tolls_amount            TEXT,
+    ehail_fee               TEXT,
     improvement_surcharge   TEXT,
     total_amount            TEXT,
     payment_type            TEXT,

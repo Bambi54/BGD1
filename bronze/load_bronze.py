@@ -1,4 +1,4 @@
-import os, time, psycopg2, duckdb
+import os, time, psycopg2, duckdb, numpy, pandas
 
 DB = dict(
     host     = os.getenv("PGHOST",     "localhost"),
@@ -35,6 +35,60 @@ PG_CONN_STR = (
 
 BASE_URL = "https://d37ci6vzurychx.cloudfront.net/trip-data"
 
+TABLE_SCHEMAS = {
+    "yellow": [
+        "vendorid",
+        "tpep_pickup_datetime",
+        "tpep_dropoff_datetime",
+        "passenger_count",
+        "trip_distance",
+        "ratecodeid",
+        "store_and_fwd_flag",
+        "pulocationid",
+        "dolocationid",
+        "payment_type",
+        "fare_amount",
+        "extra",
+        "mta_tax",
+        "tip_amount",
+        "tolls_amount",
+        "improvement_surcharge",
+        "total_amount",
+        "congestion_surcharge",
+    ],
+    "green": [
+        "vendorid",
+        "lpep_pickup_datetime",
+        "lpep_dropoff_datetime",
+        "store_and_fwd_flag",
+        "ratecodeid",
+        "pulocationid",
+        "dolocationid",
+        "passenger_count",
+        "trip_distance",
+        "fare_amount",
+        "extra",
+        "mta_tax",
+        "tip_amount",
+        "tolls_amount",
+        "ehail_fee",
+        "improvement_surcharge",
+        "total_amount",
+        "payment_type",
+        "trip_type",
+        "congestion_surcharge",
+    ],
+    "fhv": [
+        "dispatching_base_num",
+        "pickup_datetime",
+        "dropoff_datetime",
+        "pulocationid",
+        "dolocationid",
+        "sr_flag",
+        "affiliated_base_number",
+    ],
+}
+
 CAB_TYPES = {
     "yellow": "yellow_tripdata",
     "green":  "green_tripdata",
@@ -65,26 +119,24 @@ def load_parquet_to_bronze(
 ) -> int:
     url = parquet_url(cab_key, year, month)
     table = f"bronze.raw_{cab_key}_trips"
+    target_cols = TABLE_SCHEMAS[cab_key]
 
     print(f"{cab_key} {year}-{month:02d}  {url}")
     t0 = time.time()
 
     try:
-        duck.execute(f"""
-            INSERT INTO {table}
-            SELECT *
+        cols_str  = ",".join(target_cols)
+
+        res = duck.execute(f"""
+            INSERT INTO {table} ({cols_str})
+            SELECT {cols_str}
             FROM read_parquet('{url}')
-        """)
-        duck.execute(f"SELECT changes()").fetchone()
+            RETURNING *
+        """).fetchall()
+        rows_affected = len(res)
         elapsed = time.time() - t0
-        rows = duck.execute(f"""
-            SELECT COUNT(*) FROM {table}
-            WHERE tpep_pickup_datetime LIKE '{year}-{month:02d}%'
-            OR lpep_pickup_datetime LIKE '{year}-{month:02d}%'
-            OR pickup_datetime LIKE '{year}-{month:02d}%'
-        """).fetchone()[0] if cab_key != "fhv" else 0
-        print(f"loaded in {elapsed:.1f}s")
-        return rows
+        print(f"loaded {rows_affected} rows in {elapsed:.1f}s")
+        return rows_affected
     except Exception as e:
         print(f"[skip] {e}")
         return 0
