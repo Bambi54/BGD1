@@ -127,13 +127,11 @@ def load_parquet_to_bronze(
     try:
         cols_str  = ",".join(target_cols)
 
-        res = duck.execute(f"""
+        rows_affected = duck.execute(f"""
             INSERT INTO {table} ({cols_str})
             SELECT {cols_str}
             FROM read_parquet('{url}')
-            RETURNING *
-        """).fetchall()
-        rows_affected = len(res)
+        """).fetchone()[0]
         elapsed = time.time() - t0
         print(f"loaded {rows_affected} rows in {elapsed:.1f}s")
         return rows_affected
@@ -147,8 +145,8 @@ def main():
     pg_conn = psycopg2.connect(**DB)
     pg_conn.autocommit = False
 
-    print("Creating schemas and Bronze tables...")
-    run_sql_file(pg_conn, SQL_PATH)
+    # print("Creating schemas and Bronze tables...")
+    # run_sql_file(pg_conn, SQL_PATH)
 
     print("\nOpening DuckDB with postgres_scanner...")
     duck = duckdb.connect()
