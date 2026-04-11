@@ -1,4 +1,4 @@
-import psycopg2, os
+import psycopg2, os, time
 
 DB = dict(
     host     = os.getenv("PGHOST",     "localhost"),
@@ -25,17 +25,19 @@ def run_sql_file(conn: psycopg2.extensions.connection, path: str) -> None:
                 conn.rollback()
     conn.commit()
 
-SQL_PATH = ""
+SQL_PATH = "silver/load_silver.sql"
 
 def main():
     pg_conn = psycopg2.connect(**DB)
     pg_conn.autocommit = False
-
+    
+    t0 = time.time()
     print("\nRunning Silver transformation...")
     run_sql_file(pg_conn, SQL_PATH)
 
     pg_conn.close()
-    print("\nDone.")
+    elapsed = time.time() - t0
+    print(f"\nDone in {elapsed:.1f}s")
 
 
 if __name__ == "__main__":
