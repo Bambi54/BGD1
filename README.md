@@ -56,7 +56,7 @@ python gold/load_gold.py
 START_YEAR=2021 END_YEAR=2023 python bronze/load_bronze.py
 
 # To connect to the db manually:
-docker exec -it taxipg psql -U postgres taxidb
+docker exec -it postgres_db psql -U postgres taxidb
 ```
 
 Expected runtime: ~30 min per year of data
