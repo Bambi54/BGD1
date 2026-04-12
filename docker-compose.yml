@@ -1,0 +1,59 @@
+services:
+ 
+  postgres:
+    container_name: postgres_db
+    image: postgres:15
+    environment:
+      POSTGRES_USER:     postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB:       taxidb
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./pipeline/init_schemas.sql:/docker-entrypoint-initdb.d/init_schemas.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+ 
+  dagster_webserver:
+    build: .
+    command: dagster-webserver -h 0.0.0.0 -p 3000 -w workspace.yaml
+    ports:
+      - "3000:3000"
+    environment:
+      PG_URL:       jdbc:postgresql://postgres:5432/taxidb
+      PGUSER:       postgres
+      PGPASSWORD:   postgres
+      SPARK_MASTER: local[*]
+      TAXI_YEARS:   "2023"
+      DAGSTER_HOME: /opt/dagster/dagster_home
+    volumes:
+      - dagster_home:/opt/dagster/dagster_home
+      - ./pipeline:/opt/dagster/app/pipeline
+    depends_on:
+      postgres:
+        condition: service_healthy
+ 
+  dagster_daemon:
+    build: .
+    command: dagster-daemon run -w workspace.yaml
+    environment:
+      PG_URL:       jdbc:postgresql://postgres:5432/taxidb
+      PGUSER:       postgres
+      PGPASSWORD:   postgres
+      SPARK_MASTER: local[*]
+      TAXI_YEARS:   "2023"
+      DAGSTER_HOME: /opt/dagster/dagster_home
+    volumes:
+      - dagster_home:/opt/dagster/dagster_home
+      - ./pipeline:/opt/dagster/app/pipeline
+    depends_on:
+      postgres:
+        condition: service_healthy
+ 
+volumes:
+  pgdata:
+  dagster_home:

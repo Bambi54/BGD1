@@ -1,0 +1,6 @@
+# workspace.yaml
+# Tells Dagster where to find the asset definitions.
+load_from:
+  - python_module:
+      module_name: pipeline.assets
+      attribute: defs
