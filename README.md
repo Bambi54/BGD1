@@ -13,6 +13,18 @@ Raw TLC data arrives as per-month Parquet files split across three vehicle class
  
 ---
  
+## Stack
+ 
+| Layer | Tool | Version |
+|---|---|---|
+| Orchestration | Dagster | 1.9.x |
+| Processing | PySpark | 3.5.1 |
+| Warehouse | PostgreSQL | 15 |
+| Containerisation | Docker Compose | v2 |
+| Source data | NYC TLC (public) | 2019-2024 |
+
+---
+
 ## Dataset
  
 **NYC TLC Trip Record Data** (public domain, no account required)
@@ -41,19 +53,11 @@ Raw TLC data arrives as per-month Parquet files split across three vehicle class
 ## Quickstart
  
 ```bash
-# 1. Start PostgreSQL
-docker run --name taxipg -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=taxidb -p 5432:5432 postgres:15
+# 1. Start docker compose
+docker compose up --build
  
-# 2. Install dependencies
-pip install -r requirements.txt
-
-# 3. Run the pipeline (defaults to 2023 only)
-python bronze/load_bronze.py
-python silver/load_silver.py
-python gold/load_gold.py
-
-# Load a wider range:
-START_YEAR=2021 END_YEAR=2023 python bronze/load_bronze.py
+# 2. Open dagster
+open http://localhost:3000
 
 # To connect to the db manually:
 docker exec -it postgres_db psql -U postgres taxidb
