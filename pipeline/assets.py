@@ -1,4 +1,4 @@
-import os, requests
+import os, requests, psycopg2
 from dagster import (
     asset,
     AssetExecutionContext,
@@ -28,22 +28,44 @@ PG_PROPS    = {"user": os.getenv("PGUSER", "postgres"),
                "password": os.getenv("PGPASSWORD", "postgres"),
                "driver": "org.postgresql.Driver"}
 
+PG_CONFIG = {
+    "host": os.getenv("PGHOST", "postgres"),
+    "port": os.getenv("PGPORT", "5432"),
+    "dbname": os.getenv("PGDATABASE", "taxidb"),
+    "user": os.getenv("PGUSER", "postgres"),
+    "password": os.getenv("PGPASSWORD", "postgres"),
+}
+
 CAB_TYPES = {
     "yellow": "yellow_tripdata",
     "green":  "green_tripdata",
     "fhv":    "fhv_tripdata",
 }
 
+GOLD_A_SQL_PATH = "pipeline/sql/load_gold_a.sql"
+GOLD_B_SQL_PATH = "pipeline/sql/load_gold_b.sql"
+GOLD_C_SQL_PATH = "pipeline/sql/load_gold_c.sql"
+
+def run_sql_file(path: str):
+    with open(path, "r") as f:
+        return f.read()
+    
+
 def get_spark(app_name: str = "nyc_taxi_pipeline") -> SparkSession:
     return (
         SparkSession.builder
-        .appName(app_name)
-        .master(os.getenv("SPARK_MASTER", "local[*]"))
-        .config("spark.jars.packages", "org.postgresql:postgresql:42.7.3")
-        .config("spark.sql.shuffle.partitions", "200")
-        .config("spark.driver.memory", os.getenv("SPARK_DRIVER_MEM", "4g"))
-        .config("spark.sql.legacy.timeParserPolicy", "LEGACY")
-        .getOrCreate()
+            .appName(app_name)
+            .master(os.getenv("SPARK_MASTER", "local[*]"))
+            .config("spark.jars.packages", "org.postgresql:postgresql:42.7.3")
+            .config("spark.sql.shuffle.partitions", "200")
+            .config("spark.memory.fraction", "0.6")
+            .config("spark.memory.storageFraction", "0.3")
+            .config("spark.sql.adaptive.enabled", "true")
+            .config("spark.driver.memory", os.getenv("SPARK_DRIVER_MEM", "4g"))
+            .config("spark.executor.memory", "6g")
+            .config("spark.executor.cores", "2")
+            .config("spark.sql.legacy.timeParserPolicy", "LEGACY")
+            .getOrCreate()
     )
 
 
@@ -167,6 +189,9 @@ def clean_trips(context: AssetExecutionContext, config: IngestConfig) -> Materia
                 .withColumn("passenger_count",
                     F.col("passenger_count").cast("double").cast(IntegerType())
                 ) \
+                .withColumn("file_year", F.col("file_year")) \
+                .withColumn("file_month", F.col("file_month")) \
+                .withColumn("vendor_id", F.col("vendorid")) \
                 .filter(
                     (F.col("fare_amount") > 0) &
                     (F.col("trip_distance") > 0) &
@@ -194,6 +219,9 @@ def clean_trips(context: AssetExecutionContext, config: IngestConfig) -> Materia
                 .withColumn("passenger_count",
                     F.col("passenger_count").cast("double").cast(IntegerType())
                 ) \
+                .withColumn("file_year", F.col("file_year")) \
+                .withColumn("file_month", F.col("file_month")) \
+                .withColumn("vendor_id", F.col("vendorid")) \
                 .filter(
                     (F.col("fare_amount") > 0) &
                     (F.col("trip_distance") > 0) &
@@ -202,6 +230,7 @@ def clean_trips(context: AssetExecutionContext, config: IngestConfig) -> Materia
 
 
             fhv = df.filter(F.col("cab_type") == "fhv") \
+                .withColumn("dispatching_base_num", F.col("dispatching_base_num")) \
                 .withColumn("pickup_at", F.to_timestamp("pickup_datetime")) \
                 .withColumn("dropoff_at", F.to_timestamp("dropoff_datetime")) \
                 .filter(
@@ -218,7 +247,10 @@ def clean_trips(context: AssetExecutionContext, config: IngestConfig) -> Materia
                 .withColumn("fare_amount",     F.lit(None).cast(FloatType())) \
                 .withColumn("tip_amount",      F.lit(None).cast(FloatType())) \
                 .withColumn("total_amount",    F.lit(None).cast(FloatType())) \
-                .withColumn("passenger_count", F.lit(None).cast(IntegerType()))
+                .withColumn("passenger_count", F.lit(None).cast(IntegerType())) \
+                .withColumn("file_year", F.col("file_year")) \
+                .withColumn("file_month", F.col("file_month")) \
+                .withColumn("vendor_id", F.col("vendorid")) \
 
 
             combined = yellow.unionByName(green, allowMissingColumns=True) \
@@ -262,6 +294,10 @@ def clean_trips(context: AssetExecutionContext, config: IngestConfig) -> Materia
                     "total_amount",
                     "passenger_count",
                     "trip_duration_min",
+                    "dispatching_base_num",
+                    "file_year",
+                    "file_month",
+                    "vendor_id"
                 ) \
                 .withColumn("trip_id", F.monotonically_increasing_id()) \
                 .withColumn("loaded_at", F.current_timestamp())
