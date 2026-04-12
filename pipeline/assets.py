@@ -323,6 +323,64 @@ def clean_trips(context: AssetExecutionContext, config: IngestConfig) -> Materia
     })
 
 
+def run_sql(context: AssetExecutionContext, sql_path: str, layer: str):
+    context.log.info("Connecting to Postgres...")
+
+    conn = psycopg2.connect(**PG_CONFIG)
+    conn.autocommit = True
+
+    sql_script = run_sql_file(sql_path)
+
+    try:
+        with conn.cursor() as cur:
+            context.log.info(f"Executing Gold Layer {layer} SQL")
+            cur.execute(sql_script)
+
+        context.log.info("SQL executed successfully")
+
+    except Exception as e:
+        context.log.error(f"SQL execution failed: {str(e)}")
+        raise
+
+    finally:
+        conn.close()
+
+
+@asset(deps=[clean_trips], group_name="gold", compute_kind="pyspark")
+def zone_demand_trend(context: AssetExecutionContext) -> MaterializeResult:
+    run_sql(context, GOLD_A_SQL_PATH, 'A')
+
+    return MaterializeResult(
+        metadata={
+            "status": MetadataValue.text("success"),
+            "sql_file": MetadataValue.text(GOLD_A_SQL_PATH),
+        }
+    )
+
+
+@asset(deps=[clean_trips], group_name="gold", compute_kind="sql")
+def hourly_fare_profile(context: AssetExecutionContext):
+    run_sql(context, GOLD_B_SQL_PATH, 'B')
+
+    return MaterializeResult(
+        metadata={
+            "table": MetadataValue.text("gold.hourly_fare_profile"),
+            "sql": MetadataValue.text(GOLD_B_SQL_PATH),
+        }
+    )
+
+
+@asset(deps=[clean_trips], group_name="gold", compute_kind="sql")
+def driver_revenue_rank(context: AssetExecutionContext):
+    run_sql(context, GOLD_C_SQL_PATH, 'C')
+
+    return MaterializeResult(
+        metadata={
+            "table": MetadataValue.text("gold.driver_revenue_rank"),
+            "sql": MetadataValue.text(GOLD_C_SQL_PATH),
+        }
+    )
+
 
 taxi_pipeline_job = define_asset_job(
     name="taxi_full_pipeline",
@@ -341,7 +399,10 @@ daily_schedule = ScheduleDefinition(
 defs = Definitions(
     assets=[
         raw_trips,
-        clean_trips
+        clean_trips,
+        zone_demand_trend,
+        hourly_fare_profile,
+        driver_revenue_rank,
     ],
     schedules=[daily_schedule],
 )
