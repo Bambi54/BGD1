@@ -31,6 +31,7 @@ services:
       SPARK_MASTER: local[*]
       TAXI_YEARS:   "2023"
       DAGSTER_HOME: /opt/dagster/dagster_home
+      KAFKA_BOOTSTRAP: kafka:9092
     volumes:
       - dagster_home:/opt/dagster/dagster_home
       - ./pipeline:/opt/dagster/app/pipeline
@@ -48,13 +49,39 @@ services:
       SPARK_MASTER: local[*]
       TAXI_YEARS:   "2023"
       DAGSTER_HOME: /opt/dagster/dagster_home
+      KAFKA_BOOTSTRAP: kafka:9092
     volumes:
       - dagster_home:/opt/dagster/dagster_home
       - ./pipeline:/opt/dagster/app/pipeline
     depends_on:
       postgres:
         condition: service_healthy
- 
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.6.0
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+
+  kafka:
+    image: confluentinc/cp-kafka:7.6.0
+    depends_on: [zookeeper]
+    hostname: kafka
+    ports:
+      - "9092:9092"
+      - "29092:29092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+
+      # Two listeners: internal (container→container) + external (host/spark processes)
+      KAFKA_LISTENERS: INTERNAL://0.0.0.0:9092,EXTERNAL://0.0.0.0:29092
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:9092,EXTERNAL://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+
 volumes:
   pgdata:
   dagster_home:
