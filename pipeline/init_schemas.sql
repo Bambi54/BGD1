@@ -7,13 +7,13 @@ CREATE SCHEMA IF NOT EXISTS gold;
 CREATE TABLE bronze.raw_trips (
     -- metadata
     cab_type                  VARCHAR(20),  -- yellow, green, fhv
-    file_year                 VARCHAR(20),
-    file_month                VARCHAR(20),
+    file_year                 INTEGER,
+    file_month                INTEGER,
 
     -- common taxi trip columns (yellow + green)
     vendor_id                 VARCHAR(20),
-    pickup_datetime           VARCHAR(20),
-    dropoff_datetime          VARCHAR(20),
+    pickup_datetime           TEXT,
+    dropoff_datetime          TEXT,
     passenger_count           VARCHAR(20),
     trip_distance             VARCHAR(20),
 
@@ -48,5 +48,5 @@ CREATE TABLE bronze.raw_trips (
     sr_flag                   VARCHAR(20),
 
     -- optional ingestion metadata
-    created_at                VARCHAR(20)
+    created_at                TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
